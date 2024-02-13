@@ -43,6 +43,7 @@ class PS_Generic_1(_Param_Space):
         mmb_mamp_log10=8.69,
         mmb_plaw=1.10,          # average MM2013 and KH2013
         mmb_scatter_dex=0.3,
+        mmb_zplaw=0.0,
     )
 
     # ! This is included as an example:
@@ -216,7 +217,57 @@ class PS_Generic_2(PS_Generic_1):
             shape=sam_shape,
         )
         return sam
+class PS_Evolving_1(PS_Generic_2):
+    """
+    """
 
+    @classmethod
+    def _init_hard(cls, sam, settings):
+        # hard = holo.hardening.Fixed_Time_2PL.from_sam(   # OLD
+        hard = holo.hardening.Fixed_Time_2PL_SAM(     # NEW
+            sam,
+            settings['hard_time']*GYR,
+            sepa_init=settings['hard_sepa_init']*PC,
+            rchar=settings['hard_rchar']*PC,
+            gamma_inner=settings['hard_gamma_inner'],
+            gamma_outer=settings['hard_gamma_outer'],
+        )
+        return hard
+
+    @classmethod
+    def _init_sam(cls, sam_shape, settings):
+        gsmf = holo.sams.GSMF_Schechter(
+            phi0=settings['gsmf_phi0'],
+            phiz=settings['gsmf_phiz'],
+            mchar0_log10=settings['gsmf_mchar0_log10'],
+            mcharz=settings['gsmf_mcharz'],
+            alpha0=settings['gsmf_alpha0'],
+            alphaz=settings['gsmf_alphaz'],
+        )
+        gpf = holo.sams.GPF_Power_Law(
+            frac_norm_allq=settings['gpf_frac_norm_allq'],
+            malpha=settings['gpf_malpha'],
+            qgamma=settings['gpf_qgamma'],
+            zbeta=settings['gpf_zbeta'],
+            max_frac=settings['gpf_max_frac'],
+        )
+        gmt = holo.sams.GMT_Power_Law(
+            time_norm=settings['gmt_norm']*GYR,
+            malpha=settings['gmt_malpha'],
+            qgamma=settings['gmt_qgamma'],
+            zbeta=settings['gmt_zbeta'],
+        )
+        mmbulge = holo.relations.MMBulge_Redshift_KH2013(
+            mamp_log10=settings['mmb_mamp_log10'],
+            scatter_dex=settings['mmb_scatter_dex'],
+            zplaw=settings['mmb_zplaw']
+        )
+
+        sam = holo.sams.Semi_Analytic_Model(
+            gsmf=gsmf, gpf=gpf, gmt=gmt, mmbulge=mmbulge,
+            shape=sam_shape,
+        )
+        return sam
 
 # ==============================================================================
 # ====    Uniform 05    ====
@@ -1074,6 +1125,35 @@ class PS_Uniform_09B(PS_Generic_2):
         )
         defs.update(new_def_params)
         return super().model_for_params(params, sam_shape=sam_shape, new_def_params=defs)
+
+
+class PS_Uniform_Evolving(PS_Evolving_1):
+    """`PS_Uniform_07B` with varying gamma_inner (gamma_outer=+2.5, same as 07B)
+    """
+
+    def __init__(self, log, nsamples, sam_shape, seed):
+        super().__init__(
+            log, nsamples, sam_shape, seed,
+            hard_time=PD_Uniform(0.1, 11.0),   # [Gyr]
+            gsmf_phi0=PD_Uniform(-3.5, -1.5),
+            gsmf_mchar0_log10=PD_Uniform(10.5, 12.5),   # [log10(Msol)]
+            mmb_mamp_log10=PD_Uniform(+7.6, +9.0),      # [log10(Msol)]
+            mmb_scatter_dex=PD_Uniform(+0.0, +0.9),
+            hard_gamma_inner=PD_Uniform(-1.5, +0.0),
+            mmb_zplaw=PD_Uniform(-1.0, +1.0),
+        )
+
+    @classmethod
+    def model_for_params(cls, params, sam_shape=None, new_def_params={}):
+        # NOTE: these should be the same as the default case, just duplicating them here for clarity
+        defs = dict(
+            hard_gamma_outer=+2.5,
+            hard_rchar=100.0,               # [pc]
+            hard_sepa_init=1e4,     # [pc]
+        )
+        defs.update(new_def_params)
+        return super().model_for_params(params, sam_shape=sam_shape, new_def_params=defs)
+
 
 
 # ==============================================================================
